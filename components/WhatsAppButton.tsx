@@ -18,7 +18,7 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
   return (
     <button
       onClick={handleClick}
-      className="fixed bottom-6 right-24 w-16 h-16 bg-white rounded-full shadow-2xl hover:shadow-green-200 transition-all z-50 flex items-center justify-center"
+      className="fixed bottom-24 right-6 w-16 h-16 bg-white rounded-full shadow-2xl hover:shadow-green-200 transition-all z-50 flex items-center justify-center"
       title="Chat Admin via WhatsApp"
     >
       <img src="logo.jpeg" alt="WhatsApp" className="w-10 h-10" />

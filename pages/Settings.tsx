@@ -55,7 +55,7 @@ export const Settings: React.FC = () => {
           <section className="bg-white rounded-[3rem] border border-slate-200 p-10 shadow-sm">
              <div className="flex items-center gap-6 mb-10">
                 <div className="relative">
-                  {avatarPreview || user.avatar ? (
+                  {avatarPreview || (user.avatar && user.avatar !== '') ? (
                     <img src={avatarPreview || user.avatar} className="w-24 h-24 rounded-full border-4 border-white shadow-xl" alt="Profile" />
                   ) : (
                     <div className="w-24 h-24 rounded-full border-4 border-white shadow-xl bg-slate-100 flex items-center justify-center">

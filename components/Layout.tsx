@@ -108,7 +108,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <div className="p-6 border-t border-slate-100">
            <div className="bg-slate-50 p-4 rounded-2xl flex items-center gap-3 mb-4">
-              {user.avatar ? (
+              {user.avatar && user.avatar !== '' ? (
                 <img src={user.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm" alt="Avatar" />
               ) : (
                 <div className="w-8 h-8 rounded-full border border-white shadow-sm bg-slate-100 flex items-center justify-center">

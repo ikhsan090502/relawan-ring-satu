@@ -109,22 +109,6 @@ export const Login: React.FC = () => {
             </button>
           </form>
 
-          <div className="mt-12 pt-8 border-t border-slate-100">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-6">Quick Demo Access:</p>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { r: UserRole.ADMIN, i: 'support_agent', l: 'Admin' },
-                { r: UserRole.RELAWAN, i: 'ambulance', l: 'Tim Medis' },
-                { r: UserRole.WARGA, i: 'person', l: 'Warga' },
-                { r: UserRole.PIMPINAN, i: 'monitoring', l: 'Pimpinan' }
-              ].map(d => (
-                <button key={d.r} onClick={() => quickLogin(d.r)} className="flex flex-col items-center p-3 bg-slate-50 rounded-2xl hover:bg-red-50 transition-all group">
-                  <span className="material-symbols-outlined text-slate-400 group-hover:text-red-500">{d.i}</span>
-                  <span className="text-[8px] font-black text-slate-500 uppercase mt-1">{d.l}</span>
-                </button>
-              ))}
-            </div>
-          </div>
 
           <div className="mt-10 text-center">
             <p className="text-sm font-medium text-slate-500">Warga belum terdaftar?</p>
@@ -135,8 +119,9 @@ export const Login: React.FC = () => {
         </div>
       </div>
 
-      {/* Chatbot */}
+      {/* Chatbot and WhatsApp */}
       <Chatbot />
+      <WhatsAppButton phoneNumber={whatsappNumber} />
     </div>
   );
 };

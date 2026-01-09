@@ -84,7 +84,7 @@ export const Chatbot: React.FC = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-3xl shadow-2xl border border-slate-200 z-40 flex flex-col">
+        <div className="fixed bottom-24 right-24 w-96 h-[500px] bg-white rounded-3xl shadow-2xl border border-slate-200 z-40 flex flex-col">
           {/* Header */}
           <div className="p-6 bg-red-600 text-white rounded-t-3xl">
             <h3 className="font-black text-lg">Asisten Relawan Ring Satu</h3>
