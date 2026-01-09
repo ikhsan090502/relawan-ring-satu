@@ -1,63 +1,72 @@
 
 import { User, UserRole, Report } from '../types';
-
-const DB_KEYS = {
-  USERS: 'rs_users',
-  REPORTS: 'rs_reports'
-};
+import { apiService } from './apiService';
 
 export const dbService = {
-  // Inisialisasi Database dengan data awal jika kosong
+  // Inisialisasi Database - tidak diperlukan lagi karena menggunakan API
   init: (mockUsers: User[], mockReports: Report[]) => {
-    if (!localStorage.getItem(DB_KEYS.USERS)) {
-      localStorage.setItem(DB_KEYS.USERS, JSON.stringify(mockUsers));
-    }
-    if (!localStorage.getItem(DB_KEYS.REPORTS)) {
-      localStorage.setItem(DB_KEYS.REPORTS, JSON.stringify(mockReports));
-    }
+    // No longer needed - data comes from API
+    console.log('Database service initialized with API backend');
   },
 
   // Operasi User
-  getUsers: (): User[] => {
-    const data = localStorage.getItem(DB_KEYS.USERS);
-    return data ? JSON.parse(data) : [];
+  async getUsers(): Promise<User[]> {
+    try {
+      return await apiService.users.getAll();
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      return [];
+    }
   },
 
-  getUsersByRole: (role: UserRole): User[] => {
-    return dbService.getUsers().filter(u => u.role === role);
+  async getUsersByRole(role: UserRole): Promise<User[]> {
+    const users = await dbService.getUsers();
+    return users.filter(u => u.role === role);
   },
 
-  updateUserStatus: (userId: string, status: 'Aktif' | 'Nonaktif') => {
-    const users = dbService.getUsers();
-    const updated = users.map(u => u.id === userId ? { ...u, status } : u);
-    localStorage.setItem(DB_KEYS.USERS, JSON.stringify(updated));
+  async updateUserStatus(userId: string, status: 'Aktif' | 'Nonaktif'): Promise<void> {
+    try {
+      await apiService.users.update(userId, { status });
+    } catch (error) {
+      console.error('Failed to update user status:', error);
+      throw error;
+    }
   },
 
   // Operasi Laporan
-  getReports: (): Report[] => {
-    const data = localStorage.getItem(DB_KEYS.REPORTS);
-    return data ? JSON.parse(data) : [];
+  async getReports(): Promise<Report[]> {
+    try {
+      return await apiService.reports.getAll();
+    } catch (error) {
+      console.error('Failed to fetch reports:', error);
+      return [];
+    }
   },
 
-  getReportById: (id: string): Report | undefined => {
-    const reports = dbService.getReports();
-    return reports.find(r => r.id === id);
+  async getReportById(id: string): Promise<Report | undefined> {
+    try {
+      return await apiService.reports.getById(id);
+    } catch (error) {
+      console.error('Failed to fetch report:', error);
+      return undefined;
+    }
   },
 
-  saveReport: (report: Report) => {
-    const reports = dbService.getReports();
-    reports.unshift(report);
-    localStorage.setItem(DB_KEYS.REPORTS, JSON.stringify(reports));
-    window.dispatchEvent(new Event('storage'));
+  async saveReport(report: Report): Promise<void> {
+    try {
+      await apiService.reports.create(report);
+    } catch (error) {
+      console.error('Failed to save report:', error);
+      throw error;
+    }
   },
 
-  updateReport: (updatedReport: Report) => {
-    const reports = dbService.getReports();
-    const index = reports.findIndex(r => r.id === updatedReport.id);
-    if (index !== -1) {
-      reports[index] = updatedReport;
-      localStorage.setItem(DB_KEYS.REPORTS, JSON.stringify(reports));
-      window.dispatchEvent(new Event('storage'));
+  async updateReport(updatedReport: Report): Promise<void> {
+    try {
+      await apiService.reports.update(updatedReport.id, updatedReport);
+    } catch (error) {
+      console.error('Failed to update report:', error);
+      throw error;
     }
   }
 };

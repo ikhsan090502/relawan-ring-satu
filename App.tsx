@@ -13,9 +13,7 @@ import { Settings } from './pages/Settings';
 import { About } from './pages/About';
 import { P3KGuide } from './pages/P3KGuide';
 import { ContentManagement } from './pages/ContentManagement';
-import { dbService } from './services/dbService';
 import { authService } from './services/authService';
-import { MOCK_DATABASE_USERS, MOCK_REPORTS } from './constants';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (!authService.isAuthenticated()) {
@@ -25,10 +23,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 const App: React.FC = () => {
-  useEffect(() => {
-    // Inisialisasi Database Lokal saat startup
-    dbService.init(MOCK_DATABASE_USERS, MOCK_REPORTS as any);
-  }, []);
 
   return (
     <HashRouter>

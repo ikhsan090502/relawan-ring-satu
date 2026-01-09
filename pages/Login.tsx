@@ -22,20 +22,23 @@ export const Login: React.FC = () => {
     }
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    setTimeout(() => {
-      const result = authService.attemptLogin(email, password);
+    try {
+      const result = await authService.attemptLogin(email, password);
       if (result.success) {
         navigate('/dashboard');
       } else {
         setError(result.message || 'Kredensial salah.');
         setLoading(false);
       }
-    }, 1000);
+    } catch (error: any) {
+      setError(error.message || 'Login gagal');
+      setLoading(false);
+    }
   };
 
   const quickLogin = (role: UserRole) => {

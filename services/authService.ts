@@ -1,56 +1,45 @@
 
 import { User, UserRole } from '../types';
-import { dbService } from './dbService';
+import { apiService } from './apiService';
 
 const AUTH_KEY = 'rs_current_user';
 
 export const authService = {
-  login: (user: User) => {
-    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-  },
-  
-  attemptLogin: (email: string, pass: string): { success: boolean, user?: User, message?: string } => {
-    const users = dbService.getUsers();
-    const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
-    if (!foundUser) {
-      return { success: false, message: 'Email tidak ditemukan dalam sistem.' };
+  async attemptLogin(email: string, password: string): Promise<{ success: boolean, user?: User, message?: string }> {
+    try {
+      const response = await apiService.auth.login(email, password);
+      // Store user data locally for quick access
+      localStorage.setItem(AUTH_KEY, JSON.stringify(response.user));
+      return { success: true, user: response.user };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'Login gagal' };
     }
+  },
 
-    // Simulasi password (di sistem nyata gunakan hashing)
-    if (pass.length < 6) {
-      return { success: false, message: 'Password minimal 6 karakter.' };
+  async register(userData: Omit<User, 'id' | 'status' | 'avatar'>): Promise<User> {
+    try {
+      const response = await apiService.auth.register(userData);
+      // Store user data locally
+      localStorage.setItem(AUTH_KEY, JSON.stringify(response.user));
+      return response.user;
+    } catch (error: any) {
+      throw new Error(error.message || 'Registrasi gagal');
     }
-
-    authService.login(foundUser);
-    return { success: true, user: foundUser };
   },
 
-  register: (userData: Omit<User, 'id' | 'status' | 'avatar'>) => {
-    const newUser: User = {
-      ...userData,
-      id: `WRG-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: 'Aktif',
-      avatar: ''
-    };
-    
-    const users = dbService.getUsers();
-    users.push(newUser);
-    localStorage.setItem('rs_users', JSON.stringify(users));
-    authService.login(newUser);
-    return newUser;
-  },
-
-  // Fix: Added updateCurrentUser to persist profile changes in session and user database
-  updateCurrentUser: (user: User) => {
-    authService.login(user);
-    const users = dbService.getUsers();
-    const updatedUsers = users.map(u => u.id === user.id ? user : u);
-    localStorage.setItem('rs_users', JSON.stringify(updatedUsers));
+  async updateCurrentUser(user: User): Promise<void> {
+    try {
+      await apiService.auth.updateProfile(user);
+      // Update local storage
+      localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+    } catch (error: any) {
+      throw new Error(error.message || 'Update profile gagal');
+    }
   },
 
   logout: () => {
     localStorage.removeItem(AUTH_KEY);
+    apiService.auth.logout();
   },
 
   getCurrentUser: (): User | null => {
@@ -59,6 +48,6 @@ export const authService = {
   },
 
   isAuthenticated: (): boolean => {
-    return localStorage.getItem(AUTH_KEY) !== null;
+    return localStorage.getItem(AUTH_KEY) !== null && localStorage.getItem('auth_token') !== null;
   }
 };

@@ -1,215 +1,173 @@
-// Placeholder API Service for MySQL Backend
-// In production, replace with actual API calls to your backend
-
-import { User, Report, UserRole } from '../types';
-
-const API_BASE_URL = 'http://localhost:3001/api'; // Placeholder backend URL
+// API service for handling HTTP requests to backend
+import { User, Report } from '../types';
 
 export const apiService = {
-  // User APIs
-  async getUsers(): Promise<User[]> {
-    // Placeholder - in real app, this would fetch from MySQL
-    console.log('[API] GET /users');
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const data = localStorage.getItem('rs_users');
-        resolve(data ? JSON.parse(data) : []);
-      }, 500);
-    });
+  // Base API URL - configurable via environment
+  baseURL: (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api',
+
+  // Helper method for making requests
+  async request(endpoint: string, options: RequestInit = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    // Add auth token if available
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers = {
+        ...config.headers,
+        Authorization: `Bearer ${token}`,
+      };
+    }
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'API request failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API request error:', error);
+      throw error;
+    }
   },
 
-  async createUser(userData: Omit<User, 'id'>): Promise<User> {
-    console.log('[API] POST /users', userData);
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          const users = JSON.parse(localStorage.getItem('rs_users') || '[]');
-          const newUser = {
-            ...userData,
-            id: `${userData.role === UserRole.RELAWAN ? 'AMB' : 'ADM'}-${Date.now()}`
-          };
-          users.push(newUser);
-          localStorage.setItem('rs_users', JSON.stringify(users));
-          resolve(newUser);
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
+  // Authentication methods
+  auth: {
+    async login(email: string, password: string) {
+      const response = await apiService.request('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      // Store token
+      if (response.token) {
+        localStorage.setItem('auth_token', response.token);
+      }
+      return response;
+    },
+
+    async register(userData: any) {
+      const response = await apiService.request('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      });
+      // Store token
+      if (response.token) {
+        localStorage.setItem('auth_token', response.token);
+      }
+      return response;
+    },
+
+    async getProfile() {
+      return apiService.request('/auth/profile');
+    },
+
+    async updateProfile(profileData: any) {
+      return apiService.request('/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(profileData),
+      });
+    },
+
+    logout() {
+      localStorage.removeItem('auth_token');
+    },
   },
 
-  async updateUser(id: string, userData: Partial<User>): Promise<User> {
-    console.log('[API] PUT /users/${id}', userData);
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          const users = JSON.parse(localStorage.getItem('rs_users') || '[]');
-          const index = users.findIndex((u: User) => u.id === id);
-          if (index !== -1) {
-            users[index] = { ...users[index], ...userData };
-            localStorage.setItem('rs_users', JSON.stringify(users));
-            resolve(users[index]);
-          } else {
-            reject(new Error('User not found'));
-          }
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
+  // User management
+  users: {
+    async getAll() {
+      const response = await apiService.request('/users');
+      return response.users;
+    },
+
+    async getById(id: string) {
+      const response = await apiService.request(`/users/${id}`);
+      return response.user;
+    },
+
+    async create(userData: any) {
+      const response = await apiService.request('/users', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      });
+      return response.user;
+    },
+
+    async update(id: string, userData: any) {
+      const response = await apiService.request(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(userData),
+      });
+      return response.user;
+    },
+
+    async delete(id: string) {
+      return apiService.request(`/users/${id}`, {
+        method: 'DELETE',
+      });
+    },
   },
 
-  async deleteUser(id: string): Promise<void> {
-    console.log('[API] DELETE /users/${id}');
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          const users = JSON.parse(localStorage.getItem('rs_users') || '[]');
-          const filtered = users.filter((u: User) => u.id !== id);
-          localStorage.setItem('rs_users', JSON.stringify(filtered));
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
+  // Reports management
+  reports: {
+    async getAll() {
+      const response = await apiService.request('/reports');
+      return response.reports;
+    },
+
+    async getById(id: string) {
+      const response = await apiService.request(`/reports/${id}`);
+      return response.report;
+    },
+
+    async create(reportData: any) {
+      const response = await apiService.request('/reports', {
+        method: 'POST',
+        body: JSON.stringify(reportData),
+      });
+      return response.report;
+    },
+
+    async update(id: string, reportData: any) {
+      const response = await apiService.request(`/reports/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(reportData),
+      });
+      return response.report;
+    },
+
+    async delete(id: string) {
+      return apiService.request(`/reports/${id}`, {
+        method: 'DELETE',
+      });
+    },
   },
 
-  // Report APIs
-  async getReports(): Promise<Report[]> {
-    console.log('[API] GET /reports');
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const data = localStorage.getItem('rs_reports');
-        resolve(data ? JSON.parse(data) : []);
-      }, 500);
-    });
+  // Analytics (placeholder - would need backend implementation)
+  async getAnalytics() {
+    // For now, return mock data - in production this would call backend
+    return {
+      totalReports: 0,
+      completedReports: 0,
+      activeVolunteers: 0,
+      avgResponseTime: '02:15',
+      survivalRate: '94.8%'
+    };
   },
 
-  async createReport(reportData: Omit<Report, 'id'>): Promise<Report> {
-    console.log('[API] POST /reports', reportData);
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          const reports = JSON.parse(localStorage.getItem('rs_reports') || '[]');
-          const newReport = {
-            ...reportData,
-            id: `MED-${Date.now()}`
-          };
-          reports.push(newReport);
-          localStorage.setItem('rs_reports', JSON.stringify(reports));
-          resolve(newReport);
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
+  // WhatsApp notifications (placeholder)
+  async sendWhatsAppNotification(phone: string, message: string) {
+    console.log(`[WhatsApp] Sending to ${phone}: ${message}`);
+    // In production, this would call WhatsApp API
+    return Promise.resolve();
   },
-
-  async updateReport(id: string, reportData: Partial<Report>): Promise<Report> {
-    console.log('[API] PUT /reports/${id}', reportData);
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          const reports = JSON.parse(localStorage.getItem('rs_reports') || '[]');
-          const index = reports.findIndex((r: Report) => r.id === id);
-          if (index !== -1) {
-            reports[index] = { ...reports[index], ...reportData };
-            localStorage.setItem('rs_reports', JSON.stringify(reports));
-            resolve(reports[index]);
-          } else {
-            reject(new Error('Report not found'));
-          }
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
-  },
-
-  // Authentication APIs
-  async login(email: string, password: string): Promise<{ user: User; token: string }> {
-    console.log('[API] POST /auth/login');
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          const users = JSON.parse(localStorage.getItem('rs_users') || '[]');
-          const user = users.find((u: User) => u.email === email);
-          if (user) {
-            resolve({
-              user,
-              token: 'placeholder-jwt-token-' + Date.now()
-            });
-          } else {
-            reject(new Error('Invalid credentials'));
-          }
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
-  },
-
-  async register(userData: Omit<User, 'id' | 'avatar'>): Promise<{ user: User; token: string }> {
-    console.log('[API] POST /auth/register', userData);
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        try {
-          const users = JSON.parse(localStorage.getItem('rs_users') || '[]');
-          const existing = users.find((u: User) => u.email === userData.email);
-          if (existing) {
-            reject(new Error('Email already exists'));
-            return;
-          }
-
-          const newUser = {
-            ...userData,
-            id: `WRG-${Date.now()}`,
-            avatar: ''
-          };
-          users.push(newUser);
-          localStorage.setItem('rs_users', JSON.stringify(users));
-
-          resolve({
-            user: newUser,
-            token: 'placeholder-jwt-token-' + Date.now()
-          });
-        } catch (error) {
-          reject(error);
-        }
-      }, 500);
-    });
-  },
-
-  // Notification APIs (placeholder)
-  async sendWhatsAppNotification(phone: string, message: string): Promise<void> {
-    console.log('[API] POST /notifications/whatsapp', { phone, message });
-    return new Promise(resolve => {
-      setTimeout(() => {
-        console.log(`[WhatsApp API] Sending to ${phone}: ${message}`);
-        resolve();
-      }, 500);
-    });
-  },
-
-  // Analytics APIs
-  async getAnalytics(): Promise<any> {
-    console.log('[API] GET /analytics');
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const reports = JSON.parse(localStorage.getItem('rs_reports') || '[]');
-        const users = JSON.parse(localStorage.getItem('rs_users') || '[]');
-
-        const analytics = {
-          totalReports: reports.length,
-          completedReports: reports.filter((r: Report) => r.status === 'Selesai/Pasien Diserahterimakan').length,
-          activeVolunteers: users.filter((u: User) => u.role === UserRole.RELAWAN && u.status === 'Aktif').length,
-          avgResponseTime: '02:15', // Placeholder
-          survivalRate: '94.8%' // Placeholder
-        };
-
-        resolve(analytics);
-      }, 500);
-    });
-  }
 };
