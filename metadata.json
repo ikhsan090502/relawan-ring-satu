@@ -1,0 +1,8 @@
+{
+  "name": "Relawan Ring Satu",
+  "description": "Sistem pelaporan warga terintegrasi untuk membangun lingkungan yang aman dan nyaman melalui kolaborasi real-time antara warga dan relawan.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
