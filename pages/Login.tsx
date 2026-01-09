@@ -1,9 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { MOCK_DATABASE_USERS } from '../constants';
 import { authService } from '../services/authService';
 import { UserRole } from '../types';
+import { WhatsAppButton } from '../components/WhatsAppButton';
+import { Chatbot } from '../components/Chatbot';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +13,14 @@ export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('081100001111');
+
+  useEffect(() => {
+    const storedNumber = localStorage.getItem('adminWhatsappNumber');
+    if (storedNumber) {
+      setWhatsappNumber(storedNumber);
+    }
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,6 +134,9 @@ export const Login: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Chatbot */}
+      <Chatbot />
     </div>
   );
 };

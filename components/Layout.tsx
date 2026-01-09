@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { UserRole, User } from '../types';
 import { Chatbot } from './Chatbot';
+import { WhatsAppButton } from './WhatsAppButton';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
+  const [whatsappNumber, setWhatsappNumber] = useState('081100001111');
 
   useEffect(() => {
     const currentUser = authService.getCurrentUser();
@@ -34,6 +36,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       navigate('/login');
     } else {
       setUser(currentUser);
+    }
+
+    // Load WhatsApp number from localStorage
+    const storedNumber = localStorage.getItem('adminWhatsappNumber');
+    if (storedNumber) {
+      setWhatsappNumber(storedNumber);
     }
   }, [navigate]);
 
@@ -143,8 +151,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </main>
       </div>
 
-      {/* Chatbot */}
-      <Chatbot />
+      {/* Chat functionality for Warga */}
+      {user.role === UserRole.WARGA && (
+        <>
+          <WhatsAppButton phoneNumber={whatsappNumber} />
+          <Chatbot />
+        </>
+      )}
     </div>
   );
 };

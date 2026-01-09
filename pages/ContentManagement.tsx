@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 
 interface FAQ {
@@ -14,7 +14,15 @@ interface MasterData {
 }
 
 export const ContentManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'faq' | 'master'>('faq');
+  const [activeTab, setActiveTab] = useState<'faq' | 'master' | 'settings'>('faq');
+  const [whatsappNumber, setWhatsappNumber] = useState('081100001111');
+
+  useEffect(() => {
+    const storedNumber = localStorage.getItem('adminWhatsappNumber');
+    if (storedNumber) {
+      setWhatsappNumber(storedNumber);
+    }
+  }, []);
 
   // Mock data - in real app, this would come from API
   const [faqs, setFaqs] = useState<FAQ[]>([
@@ -84,6 +92,12 @@ export const ContentManagement: React.FC = () => {
             className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'master' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}
           >
             Data Master
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeTab === 'settings' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            Pengaturan Sistem
           </button>
         </div>
 
@@ -246,6 +260,44 @@ export const ContentManagement: React.FC = () => {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200">
+              <h3 className="font-black text-slate-900 mb-4">Pengaturan WhatsApp Admin</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-2">Nomor WhatsApp Admin</label>
+                  <div className="flex gap-4">
+                    <div className="relative flex-1">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-green-500">chat</span>
+                      <input
+                        type="tel"
+                        placeholder="0812xxxx"
+                        value={whatsappNumber}
+                        onChange={e => setWhatsappNumber(e.target.value)}
+                        className="w-full h-14 pl-12 pr-5 bg-slate-50 border-slate-200 rounded-2xl font-bold focus:ring-green-500 focus:border-green-500 transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Save to localStorage or API
+                        localStorage.setItem('adminWhatsappNumber', whatsappNumber);
+                        alert('Nomor WhatsApp berhasil disimpan!');
+                      }}
+                      className="bg-green-600 text-white px-8 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-green-700 transition-all active:scale-95 shadow-lg shadow-green-200"
+                    >
+                      Simpan
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-400 font-medium italic">
+                    *Nomor ini akan digunakan untuk tombol WhatsApp yang muncul di halaman login dan akun non-warga.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
