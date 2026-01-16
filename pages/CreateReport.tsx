@@ -1,16 +1,24 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
 import { analyzeReportDescription } from '../services/geminiService'; // Tetap menggunakan nama file lama agar tidak perlu ganti struktur file, tapi logika sudah murni
-import { dbService } from '../services/dbService';
-import { authService } from '../services/authService';
-import { ReportStatus, IncidentCategory, Report } from '../types';
+import dbService from '../services/dbService';
+import authService from '../services/authService';
+import { ReportStatus, IncidentCategory, Report, ReportPriority, User } from '../types';
 
 export const CreateReport: React.FC = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [user] = useState(authService.getCurrentUser());
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const currentUser = await authService.getCurrentUser();
+      setUser(currentUser);
+    };
+    fetchUser();
+  }, []);
 
   const [formData, setFormData] = useState({
     patientName: '',
@@ -26,8 +34,9 @@ export const CreateReport: React.FC = () => {
   });
   const [evidencePhoto, setEvidencePhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
+  const [descriptionTimeout, setDescriptionTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  const categories: IncidentCategory[] = ['Gawat Darurat', 'Kecelakaan', 'Ibu Hamil/Melahirkan', 'Lansia/Sakit Kronis', 'Transportasi Medis', 'Lainnya'];
+  const categories: IncidentCategory[] = Object.values(IncidentCategory);
   const commonNeeds = ['Oksigen', 'Kursi Roda', 'Tandu/Stretcher', 'Monitor Jantung', 'Nebulizer', 'P3K Dasar'];
 
   const toggleNeed = (need: string) => {
@@ -49,17 +58,30 @@ export const CreateReport: React.FC = () => {
     }
   };
 
-  const handleDescriptionChange = async (val: string) => {
+  const handleDescriptionChange = (val: string) => {
     setFormData(prev => ({ ...prev, description: val }));
-    
+
+    // Clear previous timeout
+    if (descriptionTimeout) {
+      clearTimeout(descriptionTimeout);
+    }
+
     // Auto-triage murni berjalan jika deskripsi cukup panjang
     if (val.length > 5) {
-      const analysis = await analyzeReportDescription(val);
-      setFormData(prev => ({
-        ...prev,
-        category: analysis.category as any,
-        urgency: analysis.urgency as any
-      }));
+      const timeout = setTimeout(async () => {
+        try {
+          const analysis = await analyzeReportDescription(val);
+          setFormData(prev => ({
+            ...prev,
+            category: analysis.category as any,
+            urgency: analysis.urgency as any
+          }));
+        } catch (error) {
+          console.error('Analysis error:', error);
+        }
+      }, 1000); // Wait 1 second after user stops typing
+
+      setDescriptionTimeout(timeout);
     }
   };
 
@@ -72,31 +94,40 @@ export const CreateReport: React.FC = () => {
 
     setIsSubmitting(true);
 
-    const newReport: Report = {
-      id: `MED-${Math.floor(1000 + Math.random() * 9000)}`,
-      reporterName: user?.name || 'Warga Anonim',
-      whatsapp: user?.phone || '',
-      patientName: formData.patientName,
-      patientAge: formData.patientAge,
-      eventDate: formData.eventDate,
-      eventTime: formData.eventTime,
-      category: formData.category,
-      location: formData.location,
-      locationLink: formData.locationLink,
-      urgentNeeds: formData.needs,
-      description: formData.description,
-      chronology: formData.description,
-      evidencePhoto: photoPreview,
-      status: ReportStatus.MENUNGGU,
-      urgency: formData.urgency,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const newReport: Report = {
+        id: `MED-${Math.floor(1000 + Math.random() * 9000)}`,
+        title: formData.description.substring(0, 50) + '...',
+        reporterName: user?.name || 'Warga Anonim',
+        whatsapp: user?.phone || '',
+        patientName: formData.patientName,
+        patientAge: formData.patientAge,
+        eventDate: formData.eventDate,
+        eventTime: formData.eventTime,
+        category: formData.category,
+        location: formData.location,
+        locationLink: formData.locationLink,
+        urgentNeeds: formData.needs,
+        description: formData.description,
+        chronology: formData.description,
+        evidencePhoto: photoPreview,
+        status: ReportStatus.MENUNGGU,
+        priority: formData.urgency.includes('Merah') ? ReportPriority.DARURAT : formData.urgency.includes('Kuning') ? ReportPriority.TINGGI : ReportPriority.SEDANG,
+        urgency: formData.urgency,
+        reporterId: user?.id || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-    setTimeout(() => {
-      dbService.saveReport(newReport);
+      await dbService.saveReport(newReport);
+
+      navigate(`/report/${newReport.id}`, { state: { report: newReport } });
+    } catch (error) {
+      console.error('Failed to create report:', error);
+      alert('Gagal membuat laporan. Silakan coba lagi.');
+    } finally {
       setIsSubmitting(false);
-      navigate(`/report/${newReport.id}`);
-    }, 1500);
+    }
   };
 
   return (
@@ -159,12 +190,18 @@ export const CreateReport: React.FC = () => {
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Urgensi Triase</label>
-                <div className={`p-3 rounded-xl border text-sm font-black text-center transition-all ${
-                  formData.urgency.includes('Merah') ? 'bg-red-500 text-white border-red-500' : 
-                  formData.urgency.includes('Kuning') ? 'bg-orange-500 text-white border-orange-500' : 'bg-green-500 text-white border-green-500'
-                }`}>
-                  {formData.urgency}
-                </div>
+                <select
+                  value={formData.urgency}
+                  onChange={e => setFormData({...formData, urgency: e.target.value})}
+                  className={`w-full p-3 rounded-xl border text-sm font-black text-center transition-all ${
+                    formData.urgency.includes('Merah') ? 'bg-red-500 text-white border-red-500' :
+                    formData.urgency.includes('Kuning') ? 'bg-orange-500 text-white border-orange-500' : 'bg-green-500 text-white border-green-500'
+                  }`}
+                >
+                  <option value="Hijau (Stabil)">Hijau (Stabil)</option>
+                  <option value="Kuning (Mendesak)">Kuning (Mendesak)</option>
+                  <option value="Merah (Kritis)">Merah (Kritis)</option>
+                </select>
               </div>
             </div>
 

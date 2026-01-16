@@ -13,7 +13,7 @@ import { Settings } from './pages/Settings';
 import { About } from './pages/About';
 import { P3KGuide } from './pages/P3KGuide';
 import { ContentManagement } from './pages/ContentManagement';
-import { authService } from './services/authService';
+import authService from './services/authService';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (!authService.isAuthenticated()) {

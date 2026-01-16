@@ -1,11 +1,29 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { dbService } from '../services/dbService';
-import { UserRole } from '../types';
+import dbService from '../services/dbService';
+import { UserRole, Report, User, ReportStatus } from '../types';
 import jsPDF from 'jspdf';
 
 export const Analytics: React.FC = () => {
+  const [reports, setReports] = useState<Report[]>([]);
+  const [volunteers, setVolunteers] = useState<User[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const reportsData = await dbService.getReports();
+        const usersData = await dbService.getUsers();
+        const volunteersData = usersData.filter(u => u.role === UserRole.RELAWAN);
+        setReports(reportsData);
+        setVolunteers(volunteersData);
+      } catch (error) {
+        console.error('Failed to fetch analytics data:', error);
+      }
+    };
+    fetchData();
+  }, []);
+
   const exportMonthlyPDF = () => {
     const doc = new jsPDF();
     const currentMonth = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
@@ -16,12 +34,12 @@ export const Analytics: React.FC = () => {
 
     doc.setFontSize(14);
     doc.text('Ringkasan Kinerja:', 20, 70);
-    doc.text(`- Total Laporan Masuk: ${dbService.getReports().length}`, 20, 85);
-    doc.text(`- Laporan Disetujui: ${dbService.getReports().filter(r => r.status !== 'Ditolak/Non-Medis').length}`, 20, 100);
-    doc.text(`- Laporan Selesai: ${dbService.getReports().filter(r => r.status === 'Selesai/Pasien Diserahterimakan').length}`, 20, 115);
+    doc.text(`- Total Laporan Masuk: ${reports.length}`, 20, 85);
+    doc.text(`- Laporan Disetujui: ${reports.filter(r => r.status !== 'Ditolak/Non-Medis').length}`, 20, 100);
+    doc.text(`- Laporan Selesai: ${reports.filter(r => r.status === 'Selesai/Pasien Diserahterimakan').length}`, 20, 115);
 
     doc.text('Distribusi Status:', 20, 140);
-    const statusCounts = dbService.getReports().reduce((acc, r) => {
+    const statusCounts = reports.reduce((acc, r) => {
       acc[r.status] = (acc[r.status] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
@@ -33,8 +51,8 @@ export const Analytics: React.FC = () => {
     });
 
     doc.text('Performa Tim:', 20, yPos + 10);
-    const volunteerStats = dbService.getUsersByRole(UserRole.RELAWAN).map(v => {
-      const tasks = dbService.getReports().filter(r => r.assignedVolunteerId === v.id && r.status === 'Selesai/Pasien Diserahterimakan').length;
+    const volunteerStats = volunteers.map(v => {
+      const tasks = reports.filter(r => r.assignedVolunteerId === v.id && r.status === ReportStatus.SELESAI).length;
       return `${v.name}: ${tasks} tugas selesai`;
     });
 

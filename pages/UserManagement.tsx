@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { dbService } from '../services/dbService';
+import dbService from '../services/dbService';
 import { User, UserRole } from '../types';
 
 export const UserManagement: React.FC = () => {
@@ -21,18 +21,22 @@ export const UserManagement: React.FC = () => {
     email: '',
     phone: '',
     role: UserRole.RELAWAN,
+    password: '',
     expertise: '',
     address: ''
   });
 
   useEffect(() => {
-    setUsers(dbService.getUsersByRole(activeTab));
+    const loadUsers = async () => {
+      setUsers(await dbService.getUsersByRole(activeTab));
+    };
+    loadUsers();
   }, [activeTab]);
 
-  const toggleStatus = (userId: string, currentStatus: string) => {
+  const toggleStatus = async (userId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'Aktif' ? 'Nonaktif' : 'Aktif';
-    dbService.updateUserStatus(userId, nextStatus as any);
-    setUsers(dbService.getUsersByRole(activeTab));
+    await dbService.updateUserStatus(userId, nextStatus as any);
+    setUsers(await dbService.getUsersByRole(activeTab));
   };
 
   const handleEdit = (user: User) => {
@@ -46,52 +50,43 @@ export const UserManagement: React.FC = () => {
     });
   };
 
-  const handleDelete = (userId: string) => {
+  const handleDelete = async (userId: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus user ini?')) {
-      const allUsers = dbService.getUsers();
-      const updatedUsers = allUsers.filter(u => u.id !== userId);
-      localStorage.setItem('rs_users', JSON.stringify(updatedUsers));
-      setUsers(dbService.getUsersByRole(activeTab));
+      await dbService.deleteUser(userId);
+      setUsers(await dbService.getUsersByRole(activeTab));
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingUser) return;
-    const allUsers = dbService.getUsers();
-    const updatedUsers = allUsers.map(u =>
-      u.id === editingUser.id
-        ? { ...u, ...editForm }
-        : u
-    );
-    localStorage.setItem('rs_users', JSON.stringify(updatedUsers));
-    setUsers(dbService.getUsersByRole(activeTab));
+    await dbService.updateUser({ ...editingUser, ...editForm });
+    setUsers(await dbService.getUsersByRole(activeTab));
     setEditingUser(null);
   };
 
-  const handleAddUser = () => {
-    if (!addForm.name || !addForm.email || !addForm.phone) {
+  const handleAddUser = async () => {
+    if (!addForm.name || !addForm.email || !addForm.phone || !addForm.password) {
       alert('Mohon lengkapi semua field yang diperlukan');
       return;
     }
 
-    const newUser: User = {
-      id: `${addForm.role === UserRole.RELAWAN ? 'AMB' : 'ADM'}-${Math.floor(100 + Math.random() * 900)}`,
-      name: addForm.name,
-      email: addForm.email,
-      phone: addForm.phone,
-      role: addForm.role,
-      avatar: '',
-      status: 'Aktif',
-      expertise: addForm.role === UserRole.RELAWAN ? addForm.expertise : undefined,
-      address: addForm.role === UserRole.WARGA ? addForm.address : undefined
-    };
-
-    const allUsers = dbService.getUsers();
-    allUsers.push(newUser);
-    localStorage.setItem('rs_users', JSON.stringify(allUsers));
-    setUsers(dbService.getUsersByRole(activeTab));
-    setShowAddModal(false);
-    setAddForm({ name: '', email: '', phone: '', role: UserRole.RELAWAN, expertise: '', address: '' });
+    try {
+      await dbService.createUser({
+        name: addForm.name,
+        email: addForm.email,
+        phone: addForm.phone,
+        role: addForm.role,
+        password: addForm.password,
+        expertise: addForm.role === UserRole.RELAWAN ? addForm.expertise : undefined,
+        address: addForm.role === UserRole.WARGA ? addForm.address : undefined
+      });
+      setUsers(await dbService.getUsersByRole(activeTab));
+      setShowAddModal(false);
+      setAddForm({ name: '', email: '', phone: '', role: UserRole.RELAWAN, password: '', expertise: '', address: '' });
+    } catch (error) {
+      console.error('Failed to create user:', error);
+      alert('Gagal membuat user');
+    }
   };
 
   return (
@@ -283,6 +278,16 @@ export const UserManagement: React.FC = () => {
                     onChange={e => setAddForm({...addForm, phone: e.target.value})}
                     className="w-full border-slate-200 rounded-xl font-bold"
                     placeholder="0812xxxx"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Password</label>
+                  <input
+                    type="password"
+                    value={addForm.password}
+                    onChange={e => setAddForm({...addForm, password: e.target.value})}
+                    className="w-full border-slate-200 rounded-xl font-bold"
+                    placeholder="Minimal 6 karakter"
                   />
                 </div>
                 <div>

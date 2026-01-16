@@ -8,7 +8,7 @@ export async function analyzeReportDescription(description: string) {
   const desc = description.toLowerCase();
 
   // Daftar kata kunci deteksi otomatis
-  const redKeywords = ['sesak', 'darurat', 'kritis', 'pingsan', 'tidak sadar', 'jantung', 'pendarahan', 'stroke', 'kecelakaan parah'];
+  const redKeywords = ['sesak', 'darurat', 'kritis', 'pingsan', 'tidak sadar', 'jantung', 'pendarahan', 'stroke', 'kecelakaan parah', 'kejang', 'seizure'];
   const yellowKeywords = ['sakit', 'patah', 'luka', 'hamil', 'melahirkan', 'mendesak', 'demam tinggi', 'kecelakaan', 'infeksi'];
 
   let urgency: 'Merah (Kritis)' | 'Kuning (Mendesak)' | 'Hijau (Stabil)' = 'Hijau (Stabil)';

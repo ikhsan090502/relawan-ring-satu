@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { authService } from '../services/authService';
+import authService from '../services/authService';
 import { User } from '../types';
 
 export const Settings: React.FC = () => {
@@ -12,12 +12,19 @@ export const Settings: React.FC = () => {
   const [avatarPreview, setAvatarPreview] = useState<string>('');
 
   useEffect(() => {
-    const current = authService.getCurrentUser();
-    if (current) {
-      setUser(current);
-      setPhone(current.phone);
-      setAvatarPreview(current.avatar);
-    }
+    const fetchUser = async () => {
+      try {
+        const current = await authService.getCurrentUser();
+        if (current) {
+          setUser(current);
+          setPhone(current.phone);
+          setAvatarPreview(current.avatar);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+      }
+    };
+    fetchUser();
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -32,12 +39,16 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (user) {
-      const updated = { ...user, phone, avatar: avatarPreview };
-      authService.updateCurrentUser(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      try {
+        const updated = { ...user, phone, avatar: avatarPreview };
+        await authService.updateCurrentUser(updated);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      } catch (error) {
+        console.error('Failed to update user:', error);
+      }
     }
   };
 

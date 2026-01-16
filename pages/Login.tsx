@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { MOCK_DATABASE_USERS } from '../constants';
-import { authService } from '../services/authService';
+import authService from '../services/authService';
 import { UserRole } from '../types';
 import { WhatsAppButton } from '../components/WhatsAppButton';
 import { Chatbot } from '../components/Chatbot';
@@ -29,10 +29,10 @@ export const Login: React.FC = () => {
 
     try {
       const result = await authService.attemptLogin(email, password);
-      if (result.success) {
+      if (result) {
         navigate('/dashboard');
       } else {
-        setError(result.message || 'Kredensial salah.');
+        setError('Kredensial salah.');
         setLoading(false);
       }
     } catch (error: any) {

@@ -1,15 +1,16 @@
 
 import React, { useEffect, useState } from 'react';
 import { Layout } from '../components/Layout';
-import { dbService } from '../services/dbService';
+import dbService from '../services/dbService';
 import { UserRole, User, ReportStatus, Report } from '../types';
 import { useNavigate } from 'react-router-dom';
-import { authService } from '../services/authService';
+import authService from '../services/authService';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     merah: 0,
     kuning: 0,
@@ -17,22 +18,80 @@ export const Dashboard: React.FC = () => {
     selesai: 0
   });
 
-  useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    setUser(currentUser);
-    
-    const allReports = dbService.getReports();
-    setReports(allReports);
-    
-    setStats({
-      merah: allReports.filter(r => r.urgency.includes('Merah')).length,
-      kuning: allReports.filter(r => r.urgency.includes('Kuning')).length,
-      total: allReports.length,
-      selesai: allReports.filter(r => r.status === ReportStatus.SELESAI).length
-    });
+ useEffect(() => {
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      const currentUser = await authService.getCurrentUser();
+      setUser(currentUser);
+
+      const allReports = await dbService.getReports(); // ⬅️ PENTING
+      setReports(allReports);
+
+      setStats({
+        merah: allReports.filter(r => r.urgency.includes('Merah')).length,
+        kuning: allReports.filter(r => r.urgency.includes('Kuning')).length,
+        total: allReports.length,
+        selesai: allReports.filter(r => r.status === ReportStatus.SELESAI).length
+      });
+    } catch (error) {
+      console.error('Failed to load dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadDashboard();
   }, []);
 
-  if (!user) return null;
+  const updateTaskStatus = async (report: Report, newStatus: string) => {
+    const confirmText = newStatus === ReportStatus.SELESAI
+      ? "Konfirmasi penyelesaian tugas medis?"
+      : newStatus === 'Dibatalkan'
+      ? "Yakin ingin membatalkan tugas ini?"
+      : `Update status ke: ${newStatus}?`;
+
+    if (window.confirm(confirmText)) {
+      try {
+        const updatedReport: Report = {
+          ...report,
+          status: newStatus as ReportStatus,
+          adminNotes: `${report.adminNotes || ''}\n[${newStatus.toUpperCase()}]: ${new Date().toLocaleTimeString()}`.trim()
+        };
+
+        await dbService.updateReport(updatedReport);
+
+        // Refresh reports data
+        const allReports = await dbService.getReports();
+        setReports(allReports);
+
+        setStats({
+          merah: allReports.filter(r => r.urgency.includes('Merah')).length,
+          kuning: allReports.filter(r => r.urgency.includes('Kuning')).length,
+          total: allReports.length,
+          selesai: allReports.filter(r => r.status === ReportStatus.SELESAI).length
+        });
+
+        alert(`Status berhasil diupdate menjadi: ${newStatus}`);
+      } catch (error) {
+        console.error('Failed to update status:', error);
+        alert('Gagal mengupdate status. Silakan coba lagi.');
+      }
+    }
+  };
+
+  if (loading || !user) {
+    return (
+      <Layout>
+        <div className="max-w-6xl mx-auto pb-20 flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-red-200 border-t-red-600 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-600 font-medium">Memuat dashboard...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   // 1. LAYOUT UNTUK WARGA
   const WargaDashboard = () => (
@@ -92,9 +151,46 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 
+  // System Status Card Component
+  const SystemStatusCard = ({ reports, userRole }) => {
+    const hasActiveReports = reports.some(r =>
+      r.status === 'Disetujui' ||
+      r.status === 'Menuju Lokasi' ||
+      r.status === 'Tiba di Lokasi' ||
+      r.status === 'Menuju RS'
+    );
+
+    const showCard = userRole === 'admin' || userRole === 'ambulance' || hasActiveReports;
+
+    if (!showCard) return null;
+
+    return (
+      <div className="bg-gradient-to-r from-green-500 to-blue-600 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+        <div className="relative z-10 flex items-center gap-4">
+          <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-4xl">health_and_safety</span>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-black uppercase tracking-widest mb-1">Sistem Operasional Aktif</h3>
+            <p className="text-green-100 text-sm font-medium leading-relaxed">
+              🚑 Sistem dispatch ambulance aktif dan berjalan normal. Semua fitur operasional siap digunakan.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-green-300 rounded-full animate-pulse"></div>
+            <span className="text-xs font-black uppercase tracking-widest">Online</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // 2. LAYOUT UNTUK ADMIN (DISPATCHER)
   const AdminDashboard = () => (
     <div className="space-y-8">
+      <SystemStatusCard reports={reports} userRole={user.role} />
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
           { label: 'Perlu Triase', val: reports.filter(r => r.status === ReportStatus.MENUNGGU).length, color: 'bg-red-600', icon: 'pending_actions' },
@@ -115,32 +211,49 @@ export const Dashboard: React.FC = () => {
       <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
         <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h2 className="text-sm font-black uppercase tracking-widest flex items-center gap-3">
-            <span className="material-symbols-outlined text-red-600">notification_important</span> Antrian Laporan Masuk
+            <span className="material-symbols-outlined text-red-600">notification_important</span> Status Semua Laporan
           </h2>
-          <button onClick={() => navigate('/history')} className="text-[10px] font-black text-red-600 uppercase">Lihat Semua</button>
+          <button onClick={() => navigate('/history')} className="text-[10px] font-black text-red-600 uppercase">Lihat Detail</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="px-8 py-4">Laporan</th>
+                <th className="px-8 py-4">Status</th>
+                <th className="px-8 py-4">Tim Ambulance</th>
+                <th className="px-8 py-4">Lokasi</th>
+                <th className="px-8 py-4 text-right">Aksi</th>
+              </tr>
+            </thead>
             <tbody className="divide-y divide-slate-100">
-              {reports.filter(r => r.status === ReportStatus.MENUNGGU).map(r => (
+              {reports.slice(0, 10).map(r => (
                 <tr key={r.id} onClick={() => navigate(`/report/${r.id}`)} className="hover:bg-slate-50 cursor-pointer transition-colors">
                   <td className="px-8 py-6">
                     <p className="text-sm font-black text-slate-900 leading-none mb-1">{r.id}</p>
                     <p className="text-[10px] font-bold text-slate-400 uppercase">{r.patientName}</p>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${r.urgency.includes('Merah') ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                    <span className={`inline-block px-2 py-1 rounded-full text-[8px] font-black uppercase mt-1 ${r.urgency.includes('Merah') ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
                       {r.urgency}
                     </span>
                   </td>
+                  <td className="px-8 py-6">
+                    <span className="text-[10px] font-black uppercase text-slate-600">{r.status}</span>
+                  </td>
+                  <td className="px-8 py-6">
+                    {r.assignedVolunteerId ? (
+                      <span className="text-[10px] font-black text-green-600 uppercase">Tim Ditugaskan</span>
+                    ) : (
+                      <span className="text-[10px] font-black text-slate-400 uppercase">Belum Ditugaskan</span>
+                    )}
+                  </td>
                   <td className="px-8 py-6 text-xs text-slate-500 font-medium truncate max-w-xs">{r.location}</td>
                   <td className="px-8 py-6 text-right">
-                    <button className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase">Proses Sekarang</button>
+                    <button className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase">Lihat Detail</button>
                   </td>
                 </tr>
               ))}
-              {reports.filter(r => r.status === ReportStatus.MENUNGGU).length === 0 && (
-                <tr><td className="p-12 text-center text-slate-400 italic">Tidak ada antrian laporan baru.</td></tr>
+              {reports.length === 0 && (
+                <tr><td colSpan={5} className="p-12 text-center text-slate-400 italic">Belum ada laporan.</td></tr>
               )}
             </tbody>
           </table>
@@ -151,10 +264,15 @@ export const Dashboard: React.FC = () => {
 
   // 3. LAYOUT UNTUK TIM MEDIS (RELAWAN)
   const RelawanDashboard = () => {
-    const activeTasks = reports.filter(r => r.assignedVolunteerId === user.id && r.status !== ReportStatus.SELESAI);
-    
+    const activeTasks = reports.filter(r =>
+      (String(r.assignedVolunteerId) === String(user.id) && r.status !== ReportStatus.SELESAI) ||
+      (r.assignedVolunteerId === null && r.status === ReportStatus.MENUNGGU)
+    );
+
     return (
       <div className="space-y-8">
+        <SystemStatusCard reports={reports} userRole={user.role} />
+
         <div className="flex items-center justify-between">
            <h2 className="text-2xl font-black text-slate-900 italic uppercase tracking-tighter">Status Tugas Lapangan</h2>
            <div className="flex bg-white p-1 rounded-xl border border-slate-200">
@@ -171,13 +289,61 @@ export const Dashboard: React.FC = () => {
                 <p className="text-xl font-bold">{activeTasks[0].patientName} • {activeTasks[0].patientAge}th</p>
                 <p className="text-sm text-red-100 mt-2 italic">"{activeTasks[0].description}"</p>
               </div>
-              <button 
+              <button
                 onClick={() => navigate(`/report/${activeTasks[0].id}`)}
                 className="bg-white text-red-600 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl"
               >
                 Update Progress & Navigasi
               </button>
             </div>
+
+            {/* Quick Status Update */}
+            <div className="mt-6 p-6 bg-white/10 rounded-2xl border border-white/20">
+              <label className="block text-[10px] font-black uppercase text-red-200 mb-3">Update Status Cepat</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => updateTaskStatus(activeTasks[0], ReportStatus.MENUJU_LOKASI)}
+                  className={`py-3 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
+                    activeTasks[0].status === ReportStatus.MENUJU_LOKASI
+                      ? 'bg-white text-red-600'
+                      : 'bg-white/20 text-white hover:bg-white/30'
+                  }`}
+                >
+                  🚐 Menuju Lokasi
+                </button>
+                <button
+                  onClick={() => updateTaskStatus(activeTasks[0], ReportStatus.MENUJU_RS)}
+                  className={`py-3 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
+                    activeTasks[0].status === ReportStatus.MENUJU_RS
+                      ? 'bg-white text-red-600'
+                      : 'bg-white/20 text-white hover:bg-white/30'
+                  }`}
+                >
+                  🏥 Menuju RS
+                </button>
+                <button
+                  onClick={() => updateTaskStatus(activeTasks[0], ReportStatus.SELESAI)}
+                  className={`py-3 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
+                    activeTasks[0].status === ReportStatus.SELESAI
+                      ? 'bg-green-500 text-white'
+                      : 'bg-green-500/20 text-green-100 hover:bg-green-500/30'
+                  }`}
+                >
+                  ✅ Selesai
+                </button>
+                <button
+                  onClick={() => updateTaskStatus(activeTasks[0], 'Dibatalkan')}
+                  className={`py-3 px-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
+                    activeTasks[0].status === 'Dibatalkan'
+                      ? 'bg-red-500 text-white'
+                      : 'bg-red-500/20 text-red-100 hover:bg-red-500/30'
+                  }`}
+                >
+                  ❌ Dibatalkan
+                </button>
+              </div>
+            </div>
+
             <div className="mt-8 pt-8 border-t border-red-500/50 grid grid-cols-2 md:grid-cols-4 gap-4">
                <div>
                   <p className="text-[9px] font-black text-red-200 uppercase mb-1">Status</p>
@@ -324,10 +490,17 @@ export const Dashboard: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto pb-20">
-        {user.role === UserRole.WARGA && <WargaDashboard />}
-        {user.role === UserRole.ADMIN && <AdminDashboard />}
-        {user.role === UserRole.RELAWAN && <RelawanDashboard />}
-        {user.role === UserRole.PIMPINAN && <PimpinanDashboard />}
+        {user.role === 'warga' && <WargaDashboard />}
+        {user.role === 'admin' && <AdminDashboard />}
+        {user.role === 'ambulance' && <RelawanDashboard />}
+        {user.role === 'pimpinan' && <PimpinanDashboard />}
+        {/* Fallback if role doesn't match */}
+        {!['warga', 'admin', 'ambulance', 'pimpinan'].includes(user.role) && (
+          <div className="text-center py-20">
+            <p className="text-slate-600">Role tidak dikenali: {user.role}</p>
+            <p className="text-sm text-slate-400 mt-2">Hubungi administrator</p>
+          </div>
+        )}
       </div>
     </Layout>
   );

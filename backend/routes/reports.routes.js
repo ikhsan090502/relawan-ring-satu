@@ -1,13 +1,13 @@
 const express = require('express');
 const db = require('../config/database');
-const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const { authenticateToken, authorizeRoles } = require('../middleware/verifyToken');
 
 const router = express.Router();
 
 // Get all reports
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const userRole = req.user.role;
+    const userRole = req.user.role.toLowerCase(); // Case-insensitive role check
     let query = `
       SELECT r.*, u.name as assigned_volunteer_name
       FROM reports r
@@ -15,29 +15,27 @@ router.get('/', authenticateToken, async (req, res) => {
     `;
     let params = [];
 
-    // Filter based on role
-    if (userRole === 'Warga/Pemohon') {
-      // Warga only see their own reports
+    if (userRole === 'warga') {
       query += ' WHERE r.reporter_name = ?';
       params.push(req.user.name);
-    } else if (userRole === 'Tim Ambulance') {
-      // Ambulance team see assigned reports or all if admin
-      query += ' WHERE r.assigned_volunteer_id = ? OR r.status IN ("Menunggu Triase", "Disetujui/Diteruskan")';
+    } else if (userRole === 'ambulance') {
+      // Ambulance users see reports assigned to them OR pending assignment
+      query += ' WHERE (r.assigned_volunteer_id = ? OR (r.assigned_volunteer_id IS NULL AND r.status = "Menunggu Triase"))';
       params.push(req.user.id);
     }
-    // Admin/Pimpinan see all
+    // Admin sees all reports (no WHERE clause added)
 
     query += ' ORDER BY r.created_at DESC';
 
     const [reports] = await db.promise().query(query, params);
-
     res.json({ reports });
 
   } catch (error) {
     console.error('Get reports error:', error);
-    res.status(500).json({ message: 'Terjadi kesalahan server' });
+    res.status(500).json({ message: "Server error" });
   }
 });
+
 
 // Get report by ID
 router.get('/:id', authenticateToken, async (req, res) => {
@@ -59,7 +57,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const report = reports[0];
 
     // Check permissions
-    if (req.user.role === 'Warga/Pemohon' && report.reporter_name !== req.user.name) {
+    const userRole = req.user.role.toLowerCase();
+    if (userRole === 'warga' && report.reporter_name !== req.user.name) {
+      return res.status(403).json({ message: 'Tidak memiliki akses ke laporan ini' });
+    } else if (userRole === 'ambulance' && report.assigned_volunteer_id !== req.user.id) {
       return res.status(403).json({ message: 'Tidak memiliki akses ke laporan ini' });
     }
 
@@ -72,7 +73,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create report (Warga only)
-router.post('/', authenticateToken, authorizeRoles('Warga/Pemohon'), async (req, res) => {
+router.post('/', authenticateToken, authorizeRoles('warga'), async (req, res) => {
   try {
     const {
       patientName,
@@ -94,8 +95,8 @@ router.post('/', authenticateToken, authorizeRoles('Warga/Pemohon'), async (req,
       return res.status(400).json({ message: 'Nama pasien, lokasi, dan deskripsi diperlukan' });
     }
 
-    // Generate report ID
-    const reportId = `MED-${new Date().getFullYear()}${(Math.floor(Math.random() * 900) + 100).toString()}`;
+    // Use provided ID or generate new one
+    const reportId = req.body.id || `MED-${new Date().getFullYear()}${(Math.floor(Math.random() * 900) + 100).toString()}`;
 
     // Insert report
     const [result] = await db.promise().query(
@@ -151,7 +152,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const updates = req.body;
 
     // Check permissions
-    if (userRole === 'Warga/Pemohon') {
+    if (userRole === 'warga') {
       return res.status(403).json({ message: 'Warga tidak dapat mengupdate laporan' });
     }
 
@@ -203,7 +204,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete report (Admin only)
-router.delete('/:id', authenticateToken, authorizeRoles('Admin/Dispatcher'), async (req, res) => {
+router.delete('/:id', authenticateToken, authorizeRoles('Admin'), async (req, res) => {
   try {
     const { id } = req.params;
 

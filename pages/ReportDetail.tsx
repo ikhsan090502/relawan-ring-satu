@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { useParams, useNavigate } from 'react-router-dom';
-import { dbService } from '../services/dbService';
-import { authService } from '../services/authService';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import dbService from '../services/dbService';
+import authService from '../services/authService';
 import { Report, ReportStatus, UserRole, User } from '../types';
 import jsPDF from 'jspdf';
 
@@ -24,32 +24,62 @@ export const ReportDetail: React.FC = () => {
   });
 
   useEffect(() => {
-    if (id) {
-      const foundReport = dbService.getReportById(id);
-      if (foundReport) {
-        setReport(foundReport);
-        if (foundReport.assignedVolunteerId) {
-          setSelectedVolunteerId(foundReport.assignedVolunteerId);
+    const fetchData = async () => {
+      try {
+        if (id) {
+          // First check if we have a temp report from creation
+          const tempReportKey = `temp_report_${id}`;
+          const tempReportData = localStorage.getItem(tempReportKey);
+          if (tempReportData) {
+            const tempReport = JSON.parse(tempReportData);
+            setReport(tempReport);
+            if (tempReport.assignedVolunteerId) {
+              setSelectedVolunteerId(tempReport.assignedVolunteerId);
+            }
+          } else {
+            // Try to fetch from API
+            const foundReport = await dbService.getReportById(id);
+            if (foundReport) {
+              setReport(foundReport);
+              if (foundReport.assignedVolunteerId) {
+                setSelectedVolunteerId(foundReport.assignedVolunteerId);
+              }
+              // Clean up temp data since we have real data
+              localStorage.removeItem(tempReportKey);
+            }
+          }
         }
+        const currentUser = await authService.getCurrentUser();
+        setCurrentUser(currentUser);
+        // Only fetch volunteers if user is admin
+        if (currentUser?.role === 'admin') {
+          const volunteersData = await dbService.getUsersByRole(UserRole.RELAWAN);
+          setVolunteers(volunteersData);
+        }
+      } catch (error) {
+        console.error('Failed to fetch report data:', error);
       }
-    }
-    setCurrentUser(authService.getCurrentUser());
-    setVolunteers(dbService.getUsersByRole(UserRole.RELAWAN));
+    };
+    fetchData();
   }, [id]);
 
-  const handleAssignTeam = () => {
+  const handleAssignTeam = async () => {
     if (!report || !selectedVolunteerId) return;
 
-    const updatedReport: Report = {
-      ...report,
-      status: ReportStatus.DISETUJUI,
-      assignedVolunteerId: selectedVolunteerId,
-      adminNotes: `${report.adminNotes || ''}\n[DISPATCH]: Tim ditugaskan pada ${new Date().toLocaleTimeString()}`.trim()
-    };
+    try {
+      const updatedReport: Report = {
+        ...report,
+        status: ReportStatus.DISETUJUI,
+        assignedVolunteerId: selectedVolunteerId,
+        adminNotes: `${report.adminNotes || ''}\n[DISPATCH]: Tim ditugaskan pada ${new Date().toLocaleTimeString()}`.trim()
+      };
 
-    dbService.updateReport(updatedReport);
-    setReport(updatedReport);
-    setShowAssign(false);
+      await dbService.updateReport(updatedReport);
+      setReport(updatedReport);
+      setShowAssign(false);
+    } catch (error) {
+      console.error('Failed to assign team:', error);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,25 +94,29 @@ export const ReportDetail: React.FC = () => {
     }
   };
 
-  const handleSubmitReport = () => {
+  const handleSubmitReport = async () => {
     if (!report || !reportForm.chronology || !reportForm.result) {
       alert("Mohon lengkapi kronologi dan hasil penanganan.");
       return;
     }
 
-    const updated: Report = {
-      ...report,
-      status: ReportStatus.SELESAI,
-      volunteerReport: {
-        actionTaken: reportForm.result,
-        hospitalName: 'RS Terdekat', // Placeholder
-        photo: reportForm.photoPreview
-      },
-      adminNotes: `${report.adminNotes || ''}\n[SELESAI]: Laporan dikirim oleh relawan pada ${new Date().toLocaleTimeString()}\nKronologi: ${reportForm.chronology}\nHasil: ${reportForm.result}`.trim()
-    };
-    dbService.updateReport(updated);
-    setReport(updated);
-    setShowReportForm(false);
+    try {
+      const updated: Report = {
+        ...report,
+        status: ReportStatus.SELESAI,
+        volunteerReport: {
+          actionTaken: reportForm.result,
+          hospitalName: 'RS Terdekat', // Placeholder
+          photo: reportForm.photoPreview
+        },
+        adminNotes: `${report.adminNotes || ''}\n[SELESAI]: Laporan dikirim oleh relawan pada ${new Date().toLocaleTimeString()}\nKronologi: ${reportForm.chronology}\nHasil: ${reportForm.result}`.trim()
+      };
+      await dbService.updateReport(updated);
+      setReport(updated);
+      setShowReportForm(false);
+    } catch (error) {
+      console.error('Failed to submit report:', error);
+    }
   };
 
   const exportSpecificReport = () => {
@@ -115,7 +149,7 @@ export const ReportDetail: React.FC = () => {
     doc.save(`laporan-${report.id}.pdf`);
   };
 
-  const updateStatus = (newStatus: ReportStatus) => {
+  const updateStatus = async (newStatus: ReportStatus) => {
     if (!report) return;
 
     const confirmText = newStatus === ReportStatus.SELESAI
@@ -123,18 +157,22 @@ export const ReportDetail: React.FC = () => {
       : `Update status ke: ${newStatus}?`;
 
     if (window.confirm(confirmText)) {
-      const updated: Report = {
-        ...report,
-        status: newStatus,
-        adminNotes: `${report.adminNotes || ''}\n[${newStatus.toUpperCase()}]: ${new Date().toLocaleTimeString()}`.trim()
-      };
-      dbService.updateReport(updated);
-      setReport(updated);
+      try {
+        const updated: Report = {
+          ...report,
+          status: newStatus,
+          adminNotes: `${report.adminNotes || ''}\n[${newStatus.toUpperCase()}]: ${new Date().toLocaleTimeString()}`.trim()
+        };
+        await dbService.updateReport(updated);
+        setReport(updated);
 
-      // Placeholder notifikasi WhatsApp
-      console.log(`[WhatsApp Notification] Status laporan ${report.id} berubah menjadi: ${newStatus}`);
-      console.log(`Pesan yang akan dikirim ke ${report.whatsapp}: "Status laporan ${report.id} telah diupdate menjadi ${newStatus}"`);
-      alert(`Notifikasi WhatsApp placeholder: Status laporan ${report.id} telah diupdate. (Implementasi API WhatsApp diperlukan)`);
+        // Placeholder notifikasi WhatsApp
+        console.log(`[WhatsApp Notification] Status laporan ${report.id} berubah menjadi: ${newStatus}`);
+        console.log(`Pesan yang akan dikirim ke ${report.whatsapp}: "Status laporan ${report.id} telah diupdate menjadi ${newStatus}"`);
+        alert(`Notifikasi WhatsApp placeholder: Status laporan ${report.id} telah diupdate. (Implementasi API WhatsApp diperlukan)`);
+      } catch (error) {
+        console.error('Failed to update status:', error);
+      }
     }
   };
 
@@ -150,7 +188,7 @@ export const ReportDetail: React.FC = () => {
               <span className="material-symbols-outlined text-sm">arrow_back</span> Kembali
             </button>
             <div className="flex items-center gap-4">
-              {currentUser?.role === UserRole.PIMPINAN && (
+              {currentUser?.role === 'pimpinan' && (
                 <button onClick={exportSpecificReport} className="bg-slate-900 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all">
                   <span className="material-symbols-outlined text-sm">download</span> Ekspor PDF
                 </button>
@@ -208,7 +246,7 @@ export const ReportDetail: React.FC = () => {
 
           <div className="space-y-6">
             {/* Control Panel: Admin */}
-            {currentUser.role === UserRole.ADMIN && report.status !== ReportStatus.SELESAI && (
+            {currentUser.role === 'admin' && report.status !== ReportStatus.SELESAI && (
               <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl">
                 <h3 className="text-xs font-black uppercase tracking-widest mb-6 flex items-center gap-2">
                   <span className="material-symbols-outlined text-red-600">support_agent</span> Dispatcher Control
@@ -237,7 +275,7 @@ export const ReportDetail: React.FC = () => {
             )}
 
             {/* Control Panel: Relawan (Hanya jika ditugaskan) */}
-            {currentUser.role === UserRole.RELAWAN && isAssignedToMe && report.status !== ReportStatus.SELESAI && (
+            {currentUser.role === 'ambulance' && isAssignedToMe && report.status !== ReportStatus.SELESAI && (
               <div className="bg-red-600 p-8 rounded-[2.5rem] text-white shadow-2xl">
                 <h3 className="text-xs font-black uppercase tracking-widest mb-6 flex items-center gap-2">
                   <span className="material-symbols-outlined">radio</span> Tim Ambulance Lapangan
@@ -251,10 +289,11 @@ export const ReportDetail: React.FC = () => {
                     defaultValue=""
                   >
                     <option value="" disabled>Pilih Status Baru</option>
-                    <option value={ReportStatus.MENUJU_LOKASI}>🚐 Menuju Lokasi</option>
-                    <option value={ReportStatus.TIBA_DI_LOKASI}>📍 Tiba di Lokasi & Penanganan Dimulai</option>
+                    <option value={ReportStatus.MENUJU_LOKASI}>🚐 Ambulance Menuju Lokasi</option>
+                    <option value={ReportStatus.TIBA_DI_LOKASI}>📍 Penanganan Pasien</option>
                     <option value={ReportStatus.MENUJU_RS}>🏥 Menuju Rumah Sakit</option>
                     <option value={ReportStatus.SELESAI}>✅ Selesai / Serah Terima</option>
+                    <option value="Dibatalkan">❌ Dibatalkan</option>
                   </select>
                 </div>
 
@@ -287,7 +326,13 @@ export const ReportDetail: React.FC = () => {
               <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                 {volunteers.map(v => (
                   <button key={v.id} onClick={() => setSelectedVolunteerId(v.id)} className={`w-full p-6 rounded-3xl border-2 transition-all flex items-center gap-4 ${selectedVolunteerId === v.id ? 'border-red-600 bg-red-50' : 'border-slate-100 hover:border-red-200'}`}>
-                    <img src={v.avatar} className="w-14 h-14 rounded-full border-2 border-white" />
+                    {v.avatar ? (
+                      <img src={v.avatar} className="w-14 h-14 rounded-full border-2 border-white" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-slate-400">person</span>
+                      </div>
+                    )}
                     <div className="text-left">
                       <p className="font-black text-slate-900 uppercase tracking-tighter">{v.name}</p>
                       <p className="text-[10px] font-black text-slate-400 uppercase">{v.expertise}</p>

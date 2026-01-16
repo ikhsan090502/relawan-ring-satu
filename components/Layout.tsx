@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { authService } from '../services/authService';
+import authService from '../services/authService';
 import { UserRole, User } from '../types';
 import { Chatbot } from './Chatbot';
 import { WhatsAppButton } from './WhatsAppButton';
@@ -29,14 +29,23 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [whatsappNumber, setWhatsappNumber] = useState('081100001111');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    if (!currentUser) {
-      navigate('/login');
-    } else {
-      setUser(currentUser);
-    }
+    const fetchUser = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+        if (!currentUser) {
+          navigate('/login');
+        } else {
+          setUser(currentUser);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+        navigate('/login');
+      }
+    };
+    fetchUser();
 
     // Load WhatsApp number from localStorage
     const storedNumber = localStorage.getItem('adminWhatsappNumber');
@@ -68,7 +77,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <SidebarLink to="/dashboard" icon="dashboard" label="Dashboard" active={location.pathname === '/dashboard'} />
 
           {/* MENU KHUSUS WARGA */}
-          {user.role === UserRole.WARGA && (
+          {user.role === 'warga' && (
             <>
               <SidebarLink to="/create-report" icon="emergency" label="Panggil Ambulance" active={location.pathname === '/create-report'} />
               <SidebarLink to="/history" icon="history_edu" label="Riwayat Medis" active={location.pathname === '/history'} />
@@ -76,7 +85,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
 
           {/* MENU KHUSUS ADMIN (Dispatcher) */}
-          {user.role === UserRole.ADMIN && (
+          {user.role === 'admin' && (
             <>
               <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-8">Verifikasi</p>
               <SidebarLink to="/history" icon="pending_actions" label="Antrian Triase" active={location.pathname === '/history'} />
@@ -86,7 +95,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
 
           {/* MENU KHUSUS RELAWAN (Tim Ambulance) */}
-          {user.role === UserRole.RELAWAN && (
+          {user.role === 'ambulance' && (
             <>
               <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-8">Operasional</p>
               <SidebarLink to="/history" icon="assignment" label="Tugas Evakuasi" active={location.pathname === '/history'} />
@@ -94,7 +103,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
 
           {/* MENU KHUSUS PIMPINAN (Monitor) */}
-          {user.role === UserRole.PIMPINAN && (
+          {user.role === 'pimpinan' && (
             <>
               <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mt-8">Monitoring</p>
               <SidebarLink to="/analytics" icon="analytics" label="Statistik Kesehatan" active={location.pathname === '/analytics'} />
@@ -152,7 +161,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       {/* Chat functionality for Warga */}
-      {user.role === UserRole.WARGA && (
+      {user.role === 'warga' && (
         <>
           <WhatsAppButton phoneNumber={whatsappNumber} />
           <Chatbot />
